@@ -9,12 +9,16 @@ import time
 #############################################################################################
 #                                                                                           #
 #   fuzz                                                                                    #
-#   Creates a buffer of increasing length strings and send it                               #
+#   Creates a buffer of increasing length strings and send it.                              #
+#   Each string entry can be prepended by the 'before' argument, and contains               #
+#   the given 'character' repeated, or a random one if 'randomCharacter' is set.            #
+#                                                                                           #
 #   bufferEntriesNumber : total number of strings in the buffer                             #
 #   growingFactor (=100): string lenght is increased by this number each time,              #
 #                         before being added to the buffer                                  #
 #   character (='A'): the character to fill strings with                                    #
 #   randomCharacter (=False): if set to True, a random character is chosen each time        #
+#   before : if set, will be prepended to each buffer buffer entry                          #
 #   ip : ip address where program is hosted                                                 #
 #   port : port where program is listening                                                  #
 #                                                                                           #
@@ -22,23 +26,30 @@ import time
 def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, 
         ip = None, port = None):
     buffer = []
-    if (before):
-        buffer.append(before)
     counter = growingFactor
+
     while len(buffer) < int(bufferEntriesNumber):
+        bufferEntry = ''
+        if (before):
+            bufferEntry = before
+
         if (randomCharacter):
             rand = random.choice(string.ascii_letters)
-            buffer.append(rand * counter)
+            bufferEntry = bufferEntry + (rand * counter)
         else :
-            buffer.append(character * counter)
+            bufferEntry = bufferEntry + (character * counter)
+
+        buffer.append(bufferEntry)
         counter += growingFactor
-    send(buffer)
+
+    send(buffer, ip, port)
 
 #############################################################################################
 #                                                                                           #
 #   send                                                                                    #
-#   Creates a buffer of increasing length strings and send it                               #
-#   If ip and port are given, send it via socket, otherwize on stdout                       #
+#   Send the given buffer entry by entry, with possibility to break each time               #
+#   If ip and port are given, send it via socket, otherwise on stdout                       #
+#                                                                                           #
 #   buffer : buffer to send as output                                                       #
 #   ip : ip address where program is hosted                                                 #
 #   port : port where program is listening                                                  #
@@ -46,30 +57,67 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
 #############################################################################################
 def send(buffer, ip = None, port = None):
     if (ip and port):
-        try:
-            for str in buffer:
-                print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                connect=s.connect((ip,port))
-                s.send(string + '\r\n')
-                s.recv(1024)
-                print('[+] Done', file=sys.stderr)
-        except:
-            print('[!] Unable to connect to the application. You may have crashed it.', file=sys.stderr)
-            sys.exit(0)
-        finally:
-            s.close()
+        socketSend(buffer, ip, port)
     else:
-        ask = True
-        for str in buffer:
+        stdoutSend(buffer)
+
+#############################################################################################
+#                                                                                           #
+#   stdoutSend                                                                              #
+#   Send the given buffer entry by entry, with possibility to break each time               #
+#                                                                                           #
+#   buffer : buffer to send on stdout                                                       #
+#                                                                                           #
+#############################################################################################
+def stdoutSend(buffer):
+    print('[+] Sending output stdout', file=sys.stderr)
+    ask = True
+    for str in buffer:
+        if (ask):
+            print('[+] %s bytes ready to send. Press anything to break after or \'c\' to not ask again' 
+                % len(str), file=sys.stderr)
+            userInput = input()
+            if (userInput == 'c'):
+                ask = False
+        print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
+        print(str)
+
+#############################################################################################
+#                                                                                           #
+#   socketSend                                                                              #
+#   Send the given buffer entry by entry, with possibility to break each time               #
+#                                                                                           #
+#   buffer : buffer to send on the socket (ip, port)                                        #
+#   ip : ip address where program is hosted                                                 #
+#   port : port where program is listening                                                  #
+#                                                                                           #
+#############################################################################################
+def socketSend(buffer, ip, port):
+    print('[+] Sending output on %s:%s' % (ip, port), file=sys.stderr)
+    ask = True
+    for str in buffer:
+        try:
             if (ask):
                 print('[+] %s bytes ready to send. Press anything to break after or \'c\' to not ask again' 
                     % len(str), file=sys.stderr)
                 userInput = input()
                 if (userInput == 'c'):
-                    ask = False
+                    ask = False    
             print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
-            print(str)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(5)
+            s.connect((ip,int(port)))
+            s.send((str + '\n').encode())
+            # Eventually receive data in response from the application
+            # s.recv(1024)
+            print('[+] Done', file=sys.stderr)
+        except Exception as e:
+            print(e)
+            print('[!] Unable to connect to the application. You may have crashed it.', file=sys.stderr)
+            sys.exit(0)
+        finally:
+            s.close()
+
 
 #############################################################################################
 #                                                                                           #
@@ -159,6 +207,8 @@ if __name__ == "__main__":
     # General options
     parser.add_argument("-V", "--version", help="show program version", action="store_true")
     parser.add_argument("-s", "--silent", help="hide beautiful viking banner", action="store_true")
+
+    # Socket communication options
     parser.add_argument("-H", "--host", help="set the ip address where program is hosted")
     parser.add_argument("-p", "--port", help="set the port where program is listening")
 
@@ -182,5 +232,5 @@ if __name__ == "__main__":
         char = args.char
         if not (char):
             char = "A"
-        fuzz(bufferEntriesNumber=args.fuzz, growingFactor=grow, character=char, randomCharacter=args.random, before=args.before,
+        fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before,
             ip=args.host, port=args.port)
