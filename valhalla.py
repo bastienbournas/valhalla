@@ -5,17 +5,19 @@ import sys,socket
 import string
 import time
 
+import pwn
+
 #############################################################################################
 #                                                                                           #
 #   exploit                                                                                 #
 #   Cookie-cutter function to exploit the application                                       #
 #                                                                                           #
 #   before : if set, will be prepended to the exploit                                       #
-#   ip : ip address where application is hosted                                             #
-#   port : port where application is listening                                              #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdo is to be used as io.                             #
 #                                                                                           #
 #############################################################################################
-def exploit(before = None, ip = None, port = None):
+def exploit(before = None, io = None):
     print('[+] Exploit mode', file=sys.stderr)
 
 #############################################################################################
@@ -31,12 +33,11 @@ def exploit(before = None, ip = None, port = None):
 #   character (='A'): the character to fill strings with                                    #
 #   randomCharacter (=False): if set to True, a random character is chosen each time        #
 #   before : if set, will be prepended to each buffer buffer entry                          #
-#   ip : ip address where application is hosted                                             #
-#   port : port where application is listening                                              #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdo is to be used as io.                             #
 #                                                                                           #
 #############################################################################################
-def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, 
-        ip = None, port = None):
+def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, io = None):
     print('[+] Fuzz mode', file=sys.stderr)
 
     buffer = []
@@ -56,7 +57,7 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
         buffer.append(bufferEntry)
         counter += growingFactor
 
-    send(buffer, ip, port)
+    send(buffer, io)
 
 #############################################################################################
 #                                                                                           #
@@ -65,49 +66,11 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
 #   If ip and port are given, send it via socket, otherwise on stdout                       #
 #                                                                                           #
 #   buffer : buffer to send as output                                                       #
-#   ip : ip address where application is hosted                                             #
-#   port : port where application is listening                                              #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdo is to be used as io.                             #
 #                                                                                           #
 #############################################################################################
-def send(buffer, ip = None, port = None):
-    if (ip and port):
-        socketSend(buffer, ip, port)
-    else:
-        stdoutSend(buffer)
-
-#############################################################################################
-#                                                                                           #
-#   stdoutSend                                                                              #
-#   Send the given buffer entry by entry, with possibility to break each time               #
-#                                                                                           #
-#   buffer : buffer to send on stdout                                                       #
-#                                                                                           #
-#############################################################################################
-def stdoutSend(buffer):
-    print('[+] Sending output stdout', file=sys.stderr)
-    ask = True
-    for str in buffer:
-        if (ask):
-            print('[+] %s bytes ready to send. Press anything to break after or \'c\' to not ask again' 
-                % len(str), file=sys.stderr)
-            userInput = input()
-            if (userInput == 'c'):
-                ask = False
-        print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
-        print(str)
-
-#############################################################################################
-#                                                                                           #
-#   socketSend                                                                              #
-#   Send the given buffer entry by entry, with possibility to break each time               #
-#                                                                                           #
-#   buffer : buffer to send on the socket (ip, port)                                        #
-#   ip : ip address where application is hosted                                             #
-#   port : port where application is listening                                              #
-#                                                                                           #
-#############################################################################################
-def socketSend(buffer, ip, port):
-    print('[+] Sending output on %s:%s' % (ip, port), file=sys.stderr)
+def send(buffer, io = None):
     ask = True
     for str in buffer:
         try:
@@ -115,23 +78,21 @@ def socketSend(buffer, ip, port):
                 print('[+] %s bytes ready to send. Press anything to break after or \'c\' to not ask again' 
                     % len(str), file=sys.stderr)
                 userInput = input()
-                if (userInput == 'c'):
-                    ask = False    
+                if (userInput.strip() == "c"):
+                    ask = False 
+
             print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(5)
-            s.connect((ip,int(port)))
-            s.send((str + '\n').encode())
-            # Eventually receive data in response from the application
-            # s.recv(1024)
+            if (io):
+                io.send(str)
+            else:
+                print(str)
             print('[+] Done', file=sys.stderr)
         except Exception as e:
             print(e)
             print('[!] Unable to connect to the application. You may have crashed it.', file=sys.stderr)
             sys.exit(0)
-        finally:
-            s.close()
-
+            
+            
 #############################################################################################
 #                                                                                           #
 #   getBadChars                                                                             #
@@ -245,7 +206,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--before", help="When sending data (fuzz or exploit), this string is prepend first before each entry of the buffer")
 
     # Socket communication options
-    parser.add_argument("-H", "--host", help="set the ip address where application is hosted")
+    parser.add_argument("-H", "--host", help="set the host address where application is hosted")
     parser.add_argument("-p", "--port", help="set the port where application is listening")
 
     # Fuzz options
@@ -263,15 +224,25 @@ if __name__ == "__main__":
         banner()
     if (args.version):
         print ("Valhalla version 0.1")
-    elif (args.exploit):
-        exploit(ip=args.host, port=args.port)
-    elif (args.fuzz):
-        grow = args.grow
-        if not (grow):
-            grow = 100
-        char = args.char
-        if not (char):
-            char = "A"
-        fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before,
-            ip=args.host, port=args.port)
+    else:
+        io = None
+        if (args.host and args.port):
+            print('[+] Output set to %s:%s' % (args.host, args.port), file=sys.stderr)
+            io = pwn.remote(args.host,args.port, timeout=2)
+        else:
+            print('[+] Output set to stdout', file=sys.stderr)
+
+        if (args.exploit):
+            exploit(io)
+        elif (args.fuzz):
+            grow = args.grow
+            if not (grow):
+                grow = 100
+            char = args.char
+            if not (char):
+                char = "A"
+            fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before, io=io)
+
+        if (io):
+            io.close()
 
