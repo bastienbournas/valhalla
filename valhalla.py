@@ -13,9 +13,10 @@ import pwn
 #                                                                                           #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def cookieCutterExploit(io = None):
+def cookieCutterExploit(io = None, silent = None):
     print('[+] Cookie Cutter Exploit mode', file=sys.stderr)
 
     # Write your code here
@@ -32,7 +33,7 @@ def cookieCutterExploit(io = None):
 
     bufferEntry = prefix + overflow + retn + padding + payload + postfix
     buffer.append(bytes(bufferEntry, encoding='utf-8'))
-    send(buffer, io)
+    send(buffer, io, silent)
 
 #############################################################################################
 #                                                                                           #
@@ -41,15 +42,16 @@ def cookieCutterExploit(io = None):
 #                                                                                           #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def exploit(offset, ret, nop, payload, before = None, io = None):
+def exploit(offset, ret, nop, payload, before = None, io = None, silent = None):
     print('[+] Exploit mode', file=sys.stderr)
 
     buffer = []
     bufferEntry = (b"A" * int(offset)) + ret + (b"\x90" * int(nop)) + payload
     buffer.append(bufferEntry)
-    send(buffer, io)
+    send(buffer, io, silent)
 
 #############################################################################################
 #                                                                                           #
@@ -58,16 +60,17 @@ def exploit(offset, ret, nop, payload, before = None, io = None):
 #                                                                                           #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def jsonExploit(path, io = None):
+def jsonExploit(path, io = None, silent = None):
     print('[+] Json Exploit mode', file=sys.stderr)
 
     buffer = []
     bufferEntry = ""
 
     buffer.append(bytes(bufferEntry, encoding='utf-8'))
-    send(buffer, io)
+    send(buffer, io, silent)
 
 
 #############################################################################################
@@ -85,9 +88,10 @@ def jsonExploit(path, io = None):
 #   before : if set, will be prepended to each buffer buffer entry                          #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, io = None):
+def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, io = None, silent = None):
     print('[+] Fuzz mode', file=sys.stderr)
 
     buffer = []
@@ -107,7 +111,7 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
         buffer.append(bytes(bufferEntry, encoding='utf-8'))
         counter += growingFactor
 
-    send(buffer, io)
+    send(buffer, io, silent)
 
 #############################################################################################
 #                                                                                           #
@@ -118,13 +122,14 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
 #   size : size of the sequence                                                             #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def patternCreate(size, io = None):
+def patternCreate(size, io = None, silent = None):
     print('[+] Pattern Create mode', file=sys.stderr)
     buffer = []
     buffer.append(pwn.cyclic(int(size)))
-    send(buffer, io)
+    send(buffer, io, silent)
 
 #############################################################################################
 #                                                                                           #
@@ -135,9 +140,10 @@ def patternCreate(size, io = None):
 #   pattern : hexadecimal value to search in the sequence                                   #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def patternOffset(pattern, io = None):
+def patternOffset(pattern, io = None, silent = None):
     print('[+] Pattern Offset Search mode', file=sys.stderr)
     offset = pwn.cyclic_find(int(pattern, 16))
     print('[+] Offset = %s' % offset, file=sys.stderr)
@@ -150,10 +156,11 @@ def patternOffset(pattern, io = None):
 #   buffer : buffer to send as output                                                       #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
+#   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def send(buffer, io = None):
-    ask = True
+def send(buffer, io = None, silent = None):
+    ask = True if not silent else False
     for bytesLine in buffer:
         try:
             if (ask):
@@ -170,6 +177,8 @@ def send(buffer, io = None):
                 fp = os.fdopen(sys.stdout.fileno(), 'wb')
                 fp.write(bytesLine)
                 fp.flush()
+                fp.close()
+
 
             print('[+] Done', file=sys.stderr)
         except Exception as e:
@@ -282,12 +291,14 @@ ________/_/_________//______//______//______//______//_________.'_________\n\
 
 
 if __name__ == "__main__":
+    banner()
+
     text = 'Valhalla is a binary exploitation tool allowing to make basic buffer overflow faster and easier.'
     parser = argparse.ArgumentParser(description=text)
 
     # General options
-    parser.add_argument("-V", "--version", help="show valhalla version", action="store_true")
-    parser.add_argument("-S", "--silent", help="hide beautiful viking banner (SHAME, you'll go to helheim !)", action="store_true")
+    parser.add_argument("-V", "--version", help="Show valhalla version", action="store_true")
+    parser.add_argument("-S", "--silent", help="Do not ask for confirmation", action="store_true")
     parser.add_argument("-b", "--before", help="When sending data (fuzz or exploit), this string is prepend first before each entry of the buffer")
 
     # Socket communication options
@@ -315,8 +326,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    if not (args.silent):
-        banner()
+    
     if (args.version):
         print ("Valhalla version 999.0.0")
     else:
@@ -334,22 +344,22 @@ if __name__ == "__main__":
             char = args.char
             if not (char):
                 char = "A"
-            fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before, io=io)
+            fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before, io=io, silent=args.silent)
         elif (args.pattern_create):
-            patternCreate(size=args.pattern_create, io=io)
+            patternCreate(size=args.pattern_create, io=io, silent=args.silent)
         elif (args.pattern_offset):
-            patternOffset(offset=args.pattern_offset, io=io)
+            patternOffset(offset=args.pattern_offset, io=io, silent=args.silent)
         elif (args.exploit):
             if (args.offset and args.ret and args.nop and args.payload):
                 retBytes = ast.literal_eval(args.ret)
                 payloadBytes = ast.literal_eval(args.payload)
-                exploit(offset=args.offset, ret=retBytes, nop=args.nop, payload=payloadBytes, before=args.before, io=io)
+                exploit(offset=args.offset, ret=retBytes, nop=args.nop, payload=payloadBytes, before=args.before, io=io, silent=args.silent)
             else:
                 print('[-] Exploit mode needs offset (-o), return address (-r), nop sled size (-n), and payload (-p)', file=sys.stderr)
         elif (args.cookie):
-            cookieCutterExploit(io=io)
+            cookieCutterExploit(io=io, silent=args.silent)
         elif (args.json):
-            jsonExploit(path=args.json, io=io)
+            jsonExploit(path=args.json, io=io, silent=args.silent)
 
         if (io):
             io.close()
