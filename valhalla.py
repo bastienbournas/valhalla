@@ -14,7 +14,7 @@ import pwn
 #                                                                                           #
 #   before : if set, will be prepended to the exploit                                       #
 #   io (=None): pwn.tube object representing the connected remote                           #
-#               application. If None, stdo is to be used as io.                             #
+#               application. If None, stdout is to be used as io.                           #
 #                                                                                           #
 #############################################################################################
 def exploit(before = None, io = None):
@@ -34,7 +34,7 @@ def exploit(before = None, io = None):
 #   randomCharacter (=False): if set to True, a random character is chosen each time        #
 #   before : if set, will be prepended to each buffer buffer entry                          #
 #   io (=None): pwn.tube object representing the connected remote                           #
-#               application. If None, stdo is to be used as io.                             #
+#               application. If None, stdout is to be used as io.                           #
 #                                                                                           #
 #############################################################################################
 def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharacter = False, before = None, io = None):
@@ -54,38 +54,70 @@ def fuzz(bufferEntriesNumber, growingFactor = 100, character = "A", randomCharac
         else :
             bufferEntry = bufferEntry + (character * counter)
 
-        buffer.append(bufferEntry)
+        buffer.append(bytes(bufferEntry, encoding='utf-8'))
         counter += growingFactor
 
     send(buffer, io)
 
 #############################################################################################
 #                                                                                           #
+#   patternCreate                                                                           #
+#   Sends a cyclic de Bruijn sequence pattern of the given size.                            #
+#   This is similar to metasploit pattern_create.rb.                                        #
+#                                                                                           #
+#   size : size of the sequence                                                             #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdout is to be used as io.                           #
+#                                                                                           #
+#############################################################################################
+def patternCreate(size, io = None):
+    print('[+] Pattern Create mode', file=sys.stderr)
+    buffer = []
+    buffer.append(pwn.cyclic(int(size)))
+    send(buffer, io)
+
+#############################################################################################
+#                                                                                           #
+#   patternOffset                                                                           #
+#   Finds the offset of the given hexadecimal value in the de Bruijn sequence pattern       #
+#   This is similar to metasploit pattern_offset.rb.                                        #
+#                                                                                           #
+#   pattern : hexadecimal value to search in the sequence                                   #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdout is to be used as io.                           #
+#                                                                                           #
+#############################################################################################
+def patternOffset(pattern, io = None):
+    print('[+] Pattern Offset Search mode', file=sys.stderr)
+    offset = pwn.cyclic_find(int(pattern, 16))
+    print('[+] Offset = %s' % offset, file=sys.stderr)
+
+#############################################################################################
+#                                                                                           #
 #   send                                                                                    #
-#   Send the given buffer entry by entry, with possibility to break each time               #
-#   If ip and port are given, send it via socket, otherwise on stdout                       #
+#   Sends the given buffer entry by entry, with possibility to break each time              #
 #                                                                                           #
 #   buffer : buffer to send as output                                                       #
 #   io (=None): pwn.tube object representing the connected remote                           #
-#               application. If None, stdo is to be used as io.                             #
+#               application. If None, stdout is to be used as io.                           #
 #                                                                                           #
 #############################################################################################
 def send(buffer, io = None):
     ask = True
-    for str in buffer:
+    for bytesLine in buffer:
         try:
             if (ask):
                 print('[+] %s bytes ready to send. Press anything to break after or \'c\' to not ask again' 
-                    % len(str), file=sys.stderr)
+                    % len(bytesLine), file=sys.stderr)
                 userInput = input()
                 if (userInput.strip() == "c"):
                     ask = False 
 
-            print('[+] Sending %s bytes...' % len(str), file=sys.stderr)
+            print('[+] Sending %s bytes...' % len(bytesLine), file=sys.stderr)
             if (io):
-                io.send(str)
+                io.send(bytesLine)
             else:
-                print(str)
+                print(bytesLine.decode('utf-8'))
             print('[+] Done', file=sys.stderr)
         except Exception as e:
             print(e)
@@ -207,13 +239,17 @@ if __name__ == "__main__":
 
     # Socket communication options
     parser.add_argument("-H", "--host", help="set the host address where application is hosted")
-    parser.add_argument("-p", "--port", help="set the port where application is listening")
+    parser.add_argument("-P", "--port", help="set the port where application is listening")
 
     # Fuzz options
     parser.add_argument("-f", "--fuzz", help="fuzz the output")
     parser.add_argument("-g", "--grow", help="When fuzzing, the lenght is increased by this number each time (100 by default)")
     parser.add_argument("-c", "--char", help="When fuzzing, the buffer is filled with this character ('A' by default)")
     parser.add_argument("-r", "--random", help="When fuzzing, the buffer is filled random character instead", action="store_true")
+
+    # Pattern options
+    parser.add_argument("-p", "--pattern", help="send a cyclic de Bruijn sequence pattern of the given size (similar to metasploit pattern_create.rb)")
+    parser.add_argument("-o", "--offset", help="find the offset of the given hexadecimal value in the de Bruijn sequence pattern (similar to metasploit pattern_offset.rb)")
 
     # Exploit options
     parser.add_argument("-e", "--exploit", help="exploit the application", action="store_true")
@@ -223,7 +259,7 @@ if __name__ == "__main__":
     if not (args.silent):
         banner()
     if (args.version):
-        print ("Valhalla version 0.1")
+        print ("Valhalla version 999.0.0")
     else:
         io = None
         if (args.host and args.port):
@@ -232,9 +268,7 @@ if __name__ == "__main__":
         else:
             print('[+] Output set to stdout', file=sys.stderr)
 
-        if (args.exploit):
-            exploit(io)
-        elif (args.fuzz):
+        if (args.fuzz):
             grow = args.grow
             if not (grow):
                 grow = 100
@@ -242,6 +276,12 @@ if __name__ == "__main__":
             if not (char):
                 char = "A"
             fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before, io=io)
+        elif (args.pattern):
+            patternCreate(args.pattern, io)
+        elif (args.offset):
+            patternOffset(args.offset, io)
+        elif (args.exploit):
+            exploit(io)
 
         if (io):
             io.close()
