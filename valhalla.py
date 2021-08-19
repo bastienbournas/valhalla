@@ -309,7 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("-P", "--port", help="Set the port where application is listening")
 
     # Fuzz options
-    parser.add_argument("-f", "--fuzz", help="Fuzz the output")
+    parser.add_argument("-f", "--fuzz", help="Fuzz the output with the given number of tentative, each time increasing the number of bytes")
     parser.add_argument("-g", "--grow", help="When fuzzing, the lenght is increased by this number each time (100 by default)")
     parser.add_argument("-c", "--char", help="When fuzzing, the buffer is filled with this character ('A' by default)")
     parser.add_argument("-R", "--random", help="When fuzzing, the buffer is filled random character instead", action="store_true")
@@ -350,7 +350,7 @@ if __name__ == "__main__":
         elif (args.pattern_create):
             patternCreate(size=args.pattern_create, io=io, silent=args.silent)
         elif (args.pattern_offset):
-            patternOffset(offset=args.pattern_offset, io=io, silent=args.silent)
+            patternOffset(pattern=args.pattern_offset, io=io, silent=args.silent)
         elif (args.exploit):
             if (args.offset and args.ret and args.nop and args.payload):
                 retBytes = ast.literal_eval("b'" + args.ret + "'")
