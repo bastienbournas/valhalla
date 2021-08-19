@@ -174,18 +174,13 @@ def send(buffer, io = None, silent = None):
             if (io):
                 io.send(bytesLine)
             else:
-                fp = os.fdopen(sys.stdout.fileno(), 'wb')
-                fp.write(bytesLine)
-                fp.flush()
-                fp.close()
-
-
+                sys.stdout.buffer.write(bytesLine)
+                print('\n', file=sys.stderr)
             print('[+] Done', file=sys.stderr)
         except Exception as e:
             print(e)
             print('[!] Unable to connect to the application. You may have crashed it.', file=sys.stderr)
             sys.exit(0)
-            
             
 #############################################################################################
 #                                                                                           #
