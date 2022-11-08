@@ -80,7 +80,6 @@ def yamlExploit(path, io = None, silent = None):
         except yaml.YAMLError as exc:
             print(exc)
 
-
 #############################################################################################
 #                                                                                           #
 #   fuzz                                                                                    #
@@ -330,7 +329,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if (args.version):
-        print ("Valhalla version 999.0.0")
+        print ("Valhalla version 1.0.0")
     else:
         io = None
         if (args.host and args.port):
